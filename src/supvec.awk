@@ -1,4 +1,4 @@
-#! /bin/awk -f
+#! /bin/gawk -f
 
 #expects start, end, step
 

@@ -1,4 +1,4 @@
-#! /bin/awk -f
+#! /bin/gawk -f
 
 #expects no arguments
 
