@@ -1,4 +1,4 @@
-#! /bin/gawk -f
+#! /bin/awk -f
 
 #expects step, ncontrols, ncohort
 

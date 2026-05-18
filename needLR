@@ -5,11 +5,11 @@ set -euo pipefail
 
 version=4.0
 OUTPUTDIR="$(pwd)/needLR_output"
-temp=$(mktemp -u -t needlr.temp.XXXXX)
 
 thisscript=$(realpath "$0")
 scriptpath=${thisscript%/*}
 refloc=REFLOCPATH
+
 FILTERPASS=0 #this setting is to include non-passing variants or not. default is to filter nothing.
 run1kg=1 #this setting determines whether or not to run 1kg specific annotation scripts or use a custom control set
 THREADS=1
@@ -371,6 +371,8 @@ do
     esac
 done
 
+temp="${OUTPUTDIR}/needlr.temp"
+
 if [ ${#alcannotations} -gt 0 ]
 then
     SELECTEDANNO=${alcannotations}
@@ -627,7 +629,7 @@ parse_vcf() {
     then
         QUERY_LAST_GT=$(( 7 + ($nquery)*3 ))
 
-        cat $input | gawk -v first=7 \
+        cat $input | awk -v first=7 \
         -v last="${QUERY_LAST_GT}" \
         -v step=3 'BEGIN {OFS="\t"}{
         for (i = first; i <= last; i += step) {
@@ -636,7 +638,7 @@ parse_vcf() {
         }' > "${output}_truvari_merged_query_filtered_temp.txt"
     else
         QUERY_GT=7
-        cat $input | gawk -v qcol=${QUERY_GT} \
+        cat $input | awk -v qcol=${QUERY_GT} \
         'BEGIN{OFS="\t"}{if($qcol!="./."){print $0}}' > "${output}_truvari_merged_query_filtered_temp.txt"
     fi
     newlines=$( wc -l "${output}_truvari_merged_query_filtered_temp.txt" | tr -s ' ' | cut -f1 -d ' ')
@@ -655,7 +657,7 @@ parse_vcf() {
 
     ##This parses for SVs <=10Mb
     echo "Parsing for SVs <= 10Mb"
-    cat "${output}_temp1.txt" | gawk '{if($5 > -10000000 && $5 < 10000000){print $0}}' > \
+    cat "${output}_temp1.txt" | awk '{if($5 > -10000000 && $5 < 10000000){print $0}}' > \
         "${output}_temp2.txt"
 
     newlines=$( wc -l "${output}_temp2.txt" | tr -s ' ' | cut -f1 -d ' ' )
@@ -690,18 +692,18 @@ collapse_gt() {
         echo "keeping dv/dr"
         cat "${input}" | \
         $scriptpath/src/./rearrange.awk \
-         --assign step=$STEP \
-         --assign ncohort=$nquery \
-         --assign ncontrols="${TOTAL_SAMPLES}" \
+         -v step=$STEP \
+         -v ncohort=$nquery \
+         -v ncontrols="${TOTAL_SAMPLES}" \
          | tr -s '\t' > "${output}_temp3.txt"
     else
         echo "keeping only gt columns"
         QUERY_END=$(( 7 + (nquery-1)  * 3 ))
         cat "${input}" | \
         $scriptpath/src/./rearrange_dropdvdr.awk \
-         --assign step="${STEP}" \
-         --assign ncohort=$nquery \
-         --assign ncontrols="${TOTAL_SAMPLES}" \
+         -v step="${STEP}" \
+         -v ncohort=$nquery \
+         -v ncontrols="${TOTAL_SAMPLES}" \
          | tr -s '\t' > "${output}_temp3.txt"
     fi
     # final output for this function is "${output}_temp3.txt"
@@ -737,10 +739,10 @@ make_supp_vecc() {
     then
         echo "creating support vector for query cohort"
         cat "${input}" | $scriptpath/src/./supvec.awk \
-            --assign start="${Q_GT_START}" \
-            --assign end="${Q_GT_END}" \
-            --assign step="${Q_GT_STEP}" | 
-            gawk 'BEGIN{OFS="\t"}{printf("%s\t\n", $0)}'> "${output}_temp4.1.txt"
+            -v start="${Q_GT_START}" \
+            -v end="${Q_GT_END}" \
+            -v step="${Q_GT_STEP}" | 
+            awk 'BEGIN{OFS="\t"}{printf("%s\t\n", $0)}'> "${output}_temp4.1.txt"
     else
         cat "${input}" > "${output}_temp4.1.txt"
     fi
@@ -748,14 +750,14 @@ make_supp_vecc() {
     # Always make one for controls
     echo "creating support vector for controls"
     cat "${output}_temp4.1.txt" | $scriptpath/src/./supvec.awk \
-        --assign start="${CONTROL_GT_START}" \
-        --assign end="${CONTROL_GT_END}" \
-        --assign step=1 > "${output}_temp4.txt"
+        -v start="${CONTROL_GT_START}" \
+        -v end="${CONTROL_GT_END}" \
+        -v step=1 > "${output}_temp4.txt"
 
     ##Rearrange columns so SUPP_VECs are columns 8/9
-    endcol=$( head -n1 ${output}_temp4.txt | gawk '{print NF}' )
+    endcol=$( head -n1 ${output}_temp4.txt | awk '{print NF}' )
     let endcol=$endcol-1
-    SUPP_VEC=$( cat "${output}_temp4.txt" | gawk 'NR==1{print NF}' )
+    SUPP_VEC=$( cat "${output}_temp4.txt" | awk 'NR==1{print NF}' )
     if [[ "${nquery}" -gt 1 ]]
     then
         let SUPP_VEC="${SUPP_VEC}"-1
@@ -783,10 +785,10 @@ make_supp_vecc() {
 
     echo "calculating population stratified frequency statistics"
     cat "${output}_temp5.txt" | $scriptpath/src/./annocustomcontrol.awk \
-        --assign controlbreaks=$breaks \
-        --assign ncohort=$nquery \
-        --assign ncontrols="${TOTAL_SAMPLES}" \
-        --assign step=$querycols > "${output}_temp6.txt"
+        -v controlbreaks=$breaks \
+        -v ncohort=$nquery \
+        -v ncontrols="${TOTAL_SAMPLES}" \
+        -v step=$querycols > "${output}_temp6.txt"
 
 
     ##This matches the SUPP_VEC string(s) to the sample list (and lists which 1KGP samples have the SV)
@@ -798,19 +800,19 @@ make_supp_vecc() {
         cohortnames=$(echo "${COHORT_SAMPLE_NAME_LIST[@]}" | tr ' ' ',')
         cat "${output}_temp6.txt" | \
             $scriptpath/src/./matchSuppVecc.awk \
-            --assign names=$cohortnames \
-            --assign colindex=8 > "${output}_temp6.1.txt"
+            -v names=$cohortnames \
+            -v colindex=8 > "${output}_temp6.1.txt"
         echo "Matching vector support with control sample names"
         cat "${output}_temp6.1.txt" | \
             $scriptpath/src/./matchSuppVecc.awk \
-            --assign names=$names \
-            --assign colindex=9 > "${output}_temp7.txt"
+            -v names=$names \
+            -v colindex=9 > "${output}_temp7.txt"
     else
         echo "Matching vector support with control sample names"
         cat "${output}_temp6.txt" | \
             $scriptpath/src/./matchSuppVecc.awk \
-            --assign names=$names \
-            --assign colindex=8 > "${output}_temp7.txt"
+            -v names=$names \
+            -v colindex=8 > "${output}_temp7.txt"
     fi
     # final output for this function is ${output}_temp7.txt
     echo -e "\nDone with Step 4\n"
@@ -840,7 +842,7 @@ hwe() {
     echo "calculating HWE statistics"
     cat "${output}_temp7.txt" | \
         $scriptpath/src/./hwe.awk \
-        --assign totsamples="${TOTAL_SAMPLES}" > "${output}_temp11.txt"
+        -v totsamples="${TOTAL_SAMPLES}" > "${output}_temp11.txt"
 
     #This lists all population counts/frequencies, allele counts/frequencies, and HWE info
     echo "Tabulating subpopulation and population count/frequencies"
@@ -852,14 +854,14 @@ hwe() {
     fi
     cat "${output}_temp11.txt" | \
         $scriptpath/src/./assign_counts.awk \
-        --assign ncontrols="${TOTAL_SAMPLES}" \
-        --assign ncohort="$nquery" \
-        --assign step=$querycols \
-        --assign controlcounts="${subpopcounts}" > "${output}_temp12.txt"
+        -v ncontrols="${TOTAL_SAMPLES}" \
+        -v ncohort="$nquery" \
+        -v step=$querycols \
+        -v controlcounts="${subpopcounts}" > "${output}_temp12.txt"
 
     echo "Assigning HWE equilibrium"
     #This determines if the SV is in HWE
-    hwecol=$( gawk 'NR==1{print NF-3}' "${output}_temp12.txt" )
+    hwecol=$( awk 'NR==1{print NF-3}' "${output}_temp12.txt" )
 
     cat "${output}_temp12.txt" | \
         $scriptpath/src/./hwe_check.awk | \
@@ -919,7 +921,7 @@ inheritanceSupVec() {
     # the cohort (parental) support vector will always be field 8
     if [[ $nquery == 3 ]]
     then
-        cut -f8 $input | gawk -F '_' '{if(NF==1 ){\
+        cut -f8 $input | awk -F '_' '{if(NF==1 ){\
             if($0=="Proband"){print "de_novo"}
             else{print "not_present"}
         };\
@@ -933,7 +935,7 @@ inheritanceSupVec() {
                 print "paternal"}
             else {print "inherited"}}}' > $output.inheritances.txt
     else
-        cut -f8 $input | gawk -F '_' '{if($0!~/Proband/){print "not_present"}\
+        cut -f8 $input | awk -F '_' '{if($0!~/Proband/){print "not_present"}\
         else if(NF==1 && $0=="Proband"){print "not_inherited"}\
         else if(NF==2){print "inherited"}}' > $output.inheritances.txt
     fi
@@ -985,7 +987,7 @@ multiVCFControlOverlap() {
     let colend=$ncols+6
     let cutcol=4*n
 
-    cut -f7-${colend} ${output}_temp2.txt | gawk 'BEGIN{OFS="\t"}\
+    cut -f7-${colend} ${output}_temp2.txt | awk 'BEGIN{OFS="\t"}\
         {for(i=1;i<=NF;i+=3){\
             totalreads=$(i+1)+$(i+2);\
             if(totalreads==""){totalreads="."}
@@ -1003,7 +1005,7 @@ annotateGenes() {
     local input=$1
     local output=$2
 
-    NF=$(head -n1 $input | gawk '{print NF}')
+    NF=$(head -n1 $input | awk '{print NF}')
     let geneFieldInitial=$NF+4
     let geneField=$NF+1
 
@@ -1060,11 +1062,11 @@ geneIndexedAnnotations() {
     # Consolidate multigene rows
     echo "Consolidating multigene rows"
     cat $input | $scriptpath/src/./consolidateRows.awk \
-        --assign indexField=$indexField > ${output}_consolidated.txt
+        -v indexField=$indexField > ${output}_consolidated.txt
     
 
     ##Replace empty fields with "."
-    gawk 'BEGIN {FS = OFS = "\t"} {for (i = 1; i <= NF; i++) if ($i == "") $i = "."} 1' ${output}_consolidated.txt > ${output}_filled.txt
+    awk 'BEGIN {FS = OFS = "\t"} {for (i = 1; i <= NF; i++) if ($i == "") $i = "."} 1' ${output}_consolidated.txt > ${output}_filled.txt
 
     echo "Name indexed annotations complete"
 }
@@ -1095,7 +1097,7 @@ positionIndexedAnnotations() {
         -b "$CDS" \
         -c 6 \
         -o collapse \
-        | gawk 'BEGIN{FS=OFS="\t"} \
+        | awk 'BEGIN{FS=OFS="\t"} \
         {$NF= ($NF==-1 || $NF==".") ? "." : "CDS" ; print $0}' > "${output}"_cds.txt
         input=${output}_cds.txt
     fi
@@ -1113,22 +1115,22 @@ positionIndexedAnnotations() {
     if [[ "${SELECTEDANNO}" =~ tre ]]
     then
         echo "Finding TRE overlap"
-        gawk 'BEGIN{FS=OFS="\t"} $7!="INS" && $7!="DEL" && $7!="DUP" {print $0, "."}' \
+        awk 'BEGIN{FS=OFS="\t"} $7!="INS" && $7!="DEL" && $7!="DUP" {print $0, "."}' \
             "${input}" > "${output}"_novamos.txt
         bedtools map \
             -a ${input} \
             -b $VAMOSEXPAND \
             -c 4 \
             -o distinct | \
-            gawk -F '\t' '{if($7=="DUP" || $7=="INS"){print $0}}' > ${output}_insdup.txt
+            awk -F '\t' '{if($7=="DUP" || $7=="INS"){print $0}}' > ${output}_insdup.txt
         bedtools map \
             -a ${input} \
             -b $VAMOS \
             -c 4 \
             -o distinct | \
-            gawk -F '\t' '{if($7=="DEL"){print $0}}' > ${output}_del.txt
+            awk -F '\t' '{if($7=="DEL"){print $0}}' > ${output}_del.txt
         cat ${output}_insdup.txt ${output}_del.txt ${output}_novamos.txt | \
-            gawk 'BEGIN{FS=OFS="\t"} {$NF=($NF==-1||$NF==".")?".":"vamos"; print}' \
+            awk 'BEGIN{FS=OFS="\t"} {$NF=($NF==-1||$NF==".")?".":"vamos"; print}' \
             | sort -k1,1 -k2,2n -k3,3n | uniq > ${output}_tre.txt
         input=${output}_tre.txt
     fi
@@ -1136,7 +1138,7 @@ positionIndexedAnnotations() {
     then
         # centromeres, pericentromeres, telomeres
         echo "Finding centromeres, pericentromere, telomere overlap"
-        NF=$( head -n1 ${input} | gawk -F '\t' '{print NF}')
+        NF=$( head -n1 ${input} | awk -F '\t' '{print NF}')
         let offset=$NF+4
         let newNF=$NF+6
         bedtools intersect -wa -wb -loj \
@@ -1158,7 +1160,7 @@ positionIndexedAnnotations() {
             -a ${input} \
             -b ${REPEAT_MASKER} \
             -c 6 \
-            -o distinct | gawk 'BEGIN{FS=OFS="\t"} {$NF=($NF==-1||$NF==".")?".":"repeat"; print}' > \
+            -o distinct | awk 'BEGIN{FS=OFS="\t"} {$NF=($NF==-1||$NF==".")?".":"repeat"; print}' > \
             ${output}_repeats.txt
         input=${output}_repeats.txt
 
@@ -1177,7 +1179,7 @@ positionIndexedAnnotations() {
             -c 4 \
             -F 1.0 \
             -o distinct | \
-            gawk 'BEGIN{FS=OFS="\t"} {$NF=($NF==-1||$NF==".")?".":"HP>=50bp"; print}' \
+            awk 'BEGIN{FS=OFS="\t"} {$NF=($NF==-1||$NF==".")?".":"HP>=50bp"; print}' \
             > ${output}_homopolymers.txt
         input=${output}_homopolymers.txt
 
@@ -1209,7 +1211,7 @@ printVCF() {
 
     echo "Building output VCF"
 
-    paste <( cat $input | gawk -v qid=$qid 'BEGIN{OFS="\t"}\
+    paste <( cat $input | awk -v qid=$qid 'BEGIN{OFS="\t"}\
     NR==1{print $1,$2,$4,$5,$6,$7,$3,"Query_ID"}\
     NR>1{print $1,$2,$4,$5,$6,$7,$3,qid}' ) <(cut -f8- $input ) > ${output}_vcf_rearrange.txt
 
@@ -1237,7 +1239,7 @@ printVCF() {
 
     tail -n+2 ${output}_vcf_rearrange.txt | \
         sed 's/;/,/g' | \
-        gawk -F '\t' \
+        awk -F '\t' \
             -v header=${infoheaderval} \
             'BEGIN{OFS="\t"; ninfo=split(header,infoarray,"|")}
             {
@@ -1379,14 +1381,14 @@ printTable() {
 
     longcols=( 4 5 ) #REF ALT
     let annotationstart=$sampleend+2
-    NF=$( head -n1 ${output}_results_long.txt | gawk '{print NF}' )
+    NF=$( head -n1 ${output}_results_long.txt | awk '{print NF}' )
     let SUBGROUPCOLUMNS=${NSUBGROUPS}*4
     let annotationstop=$NF-6-$SUBGROUPCOLUMNS
     
     echo "${tableheader[@]}" | tr ' ' '\t' > ${finalOutput}_RESULTS.tsv
         
     cat ${output}_results_long.txt | \
-        gawk -F '\t' -v annostart=${annotationstart} -v annostop=${annotationstop} \
+        awk -F '\t' -v annostart=${annotationstart} -v annostop=${annotationstop} \
         -v ref=4 -v alt=5 'BEGIN{OFS="\t"}\
         {if(length($ref) > 30000){$ref="[too_long_see_vcf]"};
             if(length($alt) > 30000){$alt="[too_long_see_vcf]"};
@@ -1412,11 +1414,11 @@ filterTable() {
     fi
 
     ##Filtered output 1: SVs absent from 1KGP entirely (afcol = Allele_Freq_ALL_1KGP)
-    gawk -F'\t' -v afcol=$afcol 'BEGIN{OFS="\t"} NR==1 || $afcol==0 {print}' \
+    awk -F'\t' -v afcol=$afcol 'BEGIN{OFS="\t"} NR==1 || $afcol==0 {print}' \
      $input > "${output}_RESULTS_unique.tsv"
 
     ##Filtered output 2: SVs with 1KGP allele freq <=0.01
-    gawk -F'\t' -v afcol=$afcol 'BEGIN{OFS="\t"} NR==1 || $afcol<=0.01 {print}' \
+    awk -F'\t' -v afcol=$afcol 'BEGIN{OFS="\t"} NR==1 || $afcol<=0.01 {print}' \
      $input > "${output}_RESULTS_0.01.tsv"
 }
 
@@ -1431,23 +1433,23 @@ filterInheritance() {
         incol=8
 
         ##Filtered output 3: de novo SVs
-        gawk -F'\t' -v inheritance=$incol 'BEGIN{OFS="\t"} NR==1 || $inheritance=="de_novo" {print}' \
+        awk -F'\t' -v inheritance=$incol 'BEGIN{OFS="\t"} NR==1 || $inheritance=="de_novo" {print}' \
         $input > "${output}_RESULTS_denovo.tsv"
 
     else
         afcol=18
         incol=8
 
-        gawk -F'\t' -v inheritance=$incol 'BEGIN{OFS="\t"} NR==1 || $inheritance=="not_inherited" {print}' \
+        awk -F'\t' -v inheritance=$incol 'BEGIN{OFS="\t"} NR==1 || $inheritance=="not_inherited" {print}' \
         $input > "${output}_RESULTS_not_inherited.tsv"
     fi
 
     ##Filtered output 1: SVs absent from 1KGP entirely (afcol = Allele_Freq_ALL_1KGP)
-    gawk -F'\t' -v afcol=$afcol 'BEGIN{OFS="\t"} NR==1 || $afcol==0 {print}' \
+    awk -F'\t' -v afcol=$afcol 'BEGIN{OFS="\t"} NR==1 || $afcol==0 {print}' \
      $input > "${output}_RESULTS_unique.tsv"
 
     ##Filtered output 2: SVs with 1KGP allele freq <=0.01
-    gawk -F'\t' -v afcol=$afcol 'BEGIN{OFS="\t"} NR==1 || $afcol<=0.01 {print}' \
+    awk -F'\t' -v afcol=$afcol 'BEGIN{OFS="\t"} NR==1 || $afcol<=0.01 {print}' \
      $input > "${output}_RESULTS_0.01.tsv"
 
      
@@ -1551,7 +1553,7 @@ annotateRun() {
 
         annotateGenes "${output}_summarized.txt" ${output}
         
-        geneField=$(head -n1 ${output}_genes.txt| gawk '{print NF}')
+        geneField=$(head -n1 ${output}_genes.txt| awk '{print NF}')
         let indexField=$geneField-1
 
         geneIndexedAnnotations ${output}_genes.txt ${output} $geneField $indexField
@@ -1669,7 +1671,7 @@ comparatorRun() {
 
     annotateGenes "${output}_inheritance.txt" ${output}
     
-    geneField=$(head -n1 ${output}_genes.txt| gawk '{print NF}')
+    geneField=$(head -n1 ${output}_genes.txt| awk '{print NF}')
     let indexField=$geneField-1
 
     geneIndexedAnnotations ${output}_genes.txt ${output} $geneField $indexField
@@ -1726,22 +1728,22 @@ bedRun() {
             analysisquery=$query
         fi
 
-        ncols=$( head -n1 $analysisquery | gawk '{print NF}')
+        ncols=$( head -n1 $analysisquery | awk '{print NF}')
         bedheader=( $(head -n1 $analysisquery) )
         if [[ ${bedheader[0]} =~ '#' ]]
         then
             cat $analysisquery | \
-                gawk 'NR>1{diff=$3-$2;if(diff> -10000000 && diff < 10000000){print $0}}' > ${output}_temp1.txt
+                awk 'NR>1{diff=$3-$2;if(diff> -10000000 && diff < 10000000){print $0}}' > ${output}_temp1.txt
             hasheader=1
         else
             cat $analysisquery | \
-                gawk '{diff=$3-$2;if(diff> -10000000 && diff < 10000000){print $0}}' > ${output}_temp1.txt
+                awk '{diff=$3-$2;if(diff> -10000000 && diff < 10000000){print $0}}' > ${output}_temp1.txt
             hasheader=0
         fi
 
         annotateGenes "${output}_temp1.txt" ${output}
         
-        geneField=$(head -n1 ${output}_genes.txt| gawk '{print NF}')
+        geneField=$(head -n1 ${output}_genes.txt| awk '{print NF}')
         let indexField=$geneField-1
 
         geneIndexedAnnotations ${output}_genes.txt ${output} $geneField $indexField
