@@ -78,7 +78,10 @@ needLR_v4.0 has three subcommands:
 
 ## INSTALLATION AND SET UP
 
-Please install needLR using conda or Docker/podman
+Please install needLR using conda or Docker/podman/apptainer. 
+
+>[!NOTE]
+>needLR relies heavily on bash scripts and was developed in bash version 4.4-release. It was also tested using bash version 5.0-relase. There is a known incompatibility with bash versions earlier than 4.4-release. If using an earlier version of bash, please try the docker/podman/apptainer container installation method.
 
 ### Conda
 
