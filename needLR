@@ -8,7 +8,7 @@ OUTPUTDIR="$(pwd)/needLR_output"
 
 thisscript=$(realpath "$0")
 scriptpath=${thisscript%/*}
-refloc=REFLOCPATH
+refloc="/data/jake/needLR-fork/backend_files"
 
 FILTERPASS=0 #this setting is to include non-passing variants or not. default is to filter nothing.
 run1kg=1 #this setting determines whether or not to run 1kg specific annotation scripts or use a custom control set
@@ -16,6 +16,8 @@ THREADS=1
 ANALYSISREGION="All"
 DATA1KG="$refloc/UWONT_500_sniffles_2.6.2_preproc2_T31_v4.2.2.vcf.gz"
 
+merged_out_pattern=truvari_collapse_out
+collapsed_variants_pattern=truvari_collapsed_variants
 
 # truvari parameters
 
@@ -525,6 +527,9 @@ echo """Command         :   needLR $subcommand
 truvari_merge () {
     local query_files=$1
     local output=$2
+    output_merge_vcf="${output}_${merged_out_pattern}.vcf"
+    output_merge_tsv="${output}_${merged_out_pattern}.tsv"
+    output_collapsed_variants_vcf="${output}_${collapsed_variants_pattern}.vcf"
 
     query_list=( $(echo ${query_files} | tr ',' ' ') )
 
@@ -593,8 +598,8 @@ truvari_merge () {
     #Truvari collapse (T31)
     echo "Running truvari collapse"
     truvari collapse -i "${output}_bcftools_merged_with_ctrl_temp.vcf.gz" \
-        -o "${output}_truvari_merged_temp.vcf" \
-        -c "${output}_truvari_collapsed_temp.vcf" \
+        -o "${output_merge_vcf}" \
+        -c "${output_collapsed_variants_vcf}" \
         -k "${truvari_k}" \
         -s "${truvari_s}" \
         -S "${truvari_S}" \
@@ -605,10 +610,11 @@ truvari_merge () {
 
     ##This parses the Truvari VCF output for relevant information
     echo "Parsing Truvari VCF output"
-    bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/SVLEN\t%INFO/SVTYPE[\t%GT\t%DV\t%DR]\n' \
-        "${output}_truvari_merged_temp.vcf" > "${output}_truvari_merged_temp.txt"
+    # CollapseId is column 7
+    bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/SVLEN\t%INFO/SVTYPE\t%INFO/CollapseId[\t%GT\t%DV\t%DR]\n' \
+        $output_merge_vcf > "${output_merge_tsv}"
 
-    newlines=$( wc -l ${output}_truvari_merged_temp.txt | tr -s ' ' | cut -f1 -d ' ')
+    newlines=$( wc -l "${output_merge_tsv}" | tr -s ' ' | cut -f1 -d ' ')
     echo "Truvari output has $newlines lines"
 
     echo -e "\nDone with Step 1\n"
@@ -618,6 +624,7 @@ parse_vcf() {
     local input=$1
     local output=$2
     local nquery=$3
+    local filtered_tsv"=${input%.tsv}_filtered.tsv"
 
     echo -e "Starting Step 2 (filter vcf)\n"
 
@@ -635,20 +642,20 @@ parse_vcf() {
         for (i = first; i <= last; i += step) {
             if ($i != "./.") { print; next }
             }
-        }' > "${output}_truvari_merged_query_filtered_temp.txt"
+        }' > "${filtered_tsv}"
     else
         QUERY_GT=7
         cat $input | awk -v qcol=${QUERY_GT} \
-        'BEGIN{OFS="\t"}{if($qcol!="./."){print $0}}' > "${output}_truvari_merged_query_filtered_temp.txt"
+        'BEGIN{OFS="\t"}{if($qcol!="./."){print $0}}' > "${filtered_tsv}"
     fi
-    newlines=$( wc -l "${output}_truvari_merged_query_filtered_temp.txt" | tr -s ' ' | cut -f1 -d ' ')
+    newlines=$( wc -l "${filtered_tsv}" | tr -s ' ' | cut -f1 -d ' ')
     delta=$(( currentlines-newlines ))
     echo "Removed $delta lines"
     currentlines=$newlines
 
     ##This removes BNDs from the analysis (too large to efficiently annotate)
     echo "Filtering BNDs"
-    cat "${output}_truvari_merged_query_filtered_temp.txt" | grep -v BND > "${output}_temp1.txt"
+    cat "${filtered_tsv}" | grep -v BND > "${output}_temp1.txt"
     
     newlines=$( wc -l "${output}_temp1.txt" | tr -s ' ' | cut -f1 -d ' ')
     ldelta=$(( currentlines-newlines ))
@@ -964,9 +971,11 @@ cohortControlOverlap() {
 singleVCFControlOverlap() {
     local query=$1
     local output=$2
+    local output_merge_vcf="${output}_${merged_out_pattern}.vcf"
+    local output_merge_tsv="${output}_${merged_out_pattern}.tsv"
 
     truvari_merge "${query}" "${output}"
-    parse_vcf "${output}_truvari_merged_temp.txt" "${output}" 1
+    parse_vcf "${output_merge_tsv}" "${output}" 1
     collapse_gt "${output}_temp2.txt" "${output}" 1 1
     make_supp_vecc "${output}_temp3.txt" "${output}" 1 1
     hwe "${output}_temp7.txt" "${output}" 1 1
@@ -1321,9 +1330,10 @@ printTable() {
     echo "Printing tabular results to ${finalOutput}_RESULTS.tsv"
 
     # make different headers depending on input options
+    # column 9 has the CollapseId at this point
     tableheader=( CHROM POS End_Pos REF ALT SVLEN SVTYPE )
     case $nquery in
-        1) tableheader+=( Control_support Genotype Alt_Reads Ref_Reads Total_Reads ) ;;
+        1) tableheader+=( Control_support CollapseId Genotype Alt_Reads Ref_Reads Total_Reads ) ;;
         2) tableheader+=( Inheritance Control_support Genotype Alt_Reads Ref_Reads Total_Reads Parental_GT Parental_Alt_Reads Parental_Ref_Reads Parental_Total_Reads) ;;
         3) tableheader+=( Inheritance Control_support Genotype Alt_Reads Ref_Reads Total_Reads Maternal_GT Maternal_Alt_Reads Maternal_Ref_Reads Maternal_Total_Reads Paternal_GT Paternal_Alt_Reads Paternal_Ref_Reads Paternal_Total_Reads ) ;;
         *) tableheader+=( Cohort_support Control_support Pop_Count_Cohort Pop_Freq_Cohort Allele_Count_Cohort Allele_Freq_Cohort GT_coh_homWT GT_coh_het GT_coh_homVAR )
@@ -1567,7 +1577,7 @@ annotateRun() {
 
         echo "Completed NeedLR annotation of ${query}"
         echo "Cleaning up"
-        rm ${output}*
+        # rm ${output}*
 
         echo -e """\nFiles saved to: \n$(ls $finalOutput*)
         """
