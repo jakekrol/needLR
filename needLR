@@ -610,8 +610,8 @@ truvari_merge () {
 
     ##This parses the Truvari VCF output for relevant information
     echo "Parsing Truvari VCF output"
-    # CollapseId is column 7
-    bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/SVLEN\t%INFO/SVTYPE\t%INFO/CollapseId[\t%GT\t%DV\t%DR]\n' \
+    # keep ID and CollapseId
+    bcftools query -f '%CHROM\t%POS\t%ID\t%REF\t%ALT\t%INFO/SVLEN\t%INFO/SVTYPE\t%INFO/CollapseId[\t%GT\t%DV\t%DR]\n' \
         $output_merge_vcf > "${output_merge_tsv}"
 
     newlines=$( wc -l "${output_merge_tsv}" | tr -s ' ' | cut -f1 -d ' ')
@@ -663,8 +663,9 @@ parse_vcf() {
     currentlines=$newlines
 
     ##This parses for SVs <=10Mb
+    # jk: length column is now column 6, not 5
     echo "Parsing for SVs <= 10Mb"
-    cat "${output}_temp1.txt" | awk '{if($5 > -10000000 && $5 < 10000000){print $0}}' > \
+    cat "${output}_temp1.txt" | awk '{if($6 > -10000000 && $6 < 10000000){print $0}}' > \
         "${output}_temp2.txt"
 
     newlines=$( wc -l "${output}_temp2.txt" | tr -s ' ' | cut -f1 -d ' ' )
@@ -687,9 +688,9 @@ collapse_gt() {
 
     ##   Collapse to GT-only columns (drop DV/DR)
     ##   input layout (1-indexed):
-    ##   $1-$6                  : CHROM POS REF ALT SVLEN SVTYPE
-    ##   $7 .. $6+COHORT        : cohort GTs (one col per sample)
-    ##   $7+COHORT .. $6+COHORT+CTRL : 1KGP GTs (one col per sample)
+    ##   $1-$8                  : CHROM POS ID REF ALT SVLEN SVTYPE CollapseId
+    ##   $9 .. $9+COHORT        : cohort GTs (one col per sample)
+    ##   $9+COHORT .. $9+COHORT+CTRL : 1KGP GTs (one col per sample)
     ## this step also adds a '.' in position 3 to later hold the SV end pos
     echo -e "\nStarting Step 3 (preprocess gt columns)\n"
 
@@ -705,7 +706,7 @@ collapse_gt() {
          | tr -s '\t' > "${output}_temp3.txt"
     else
         echo "keeping only gt columns"
-        QUERY_END=$(( 7 + (nquery-1)  * 3 ))
+        QUERY_END=$(( 9 + (nquery-1)  * 3 ))
         cat "${input}" | \
         $scriptpath/src/./rearrange_dropdvdr.awk \
          -v step="${STEP}" \
@@ -734,8 +735,8 @@ make_supp_vecc() {
         echo "dropping query DV/DR columns"
     fi
     ##This creates a SUPP_VEC (like in Jasmine)
-    Q_GT_START=8
-    Q_GT_END=$(( 7 + (nquery*querycols) )) #preserving the closed interval
+    Q_GT_START=10
+    Q_GT_END=$(( 9 + (nquery*querycols) )) #preserving the closed interval
     Q_GT_STEP="${querycols}"
     CONTROL_GT_START=$(( Q_GT_END + 1 ))
     CONTROL_GT_END=$(( CONTROL_GT_START + TOTAL_SAMPLES - 1 )) #preserving the closed interval
@@ -1330,8 +1331,8 @@ printTable() {
     echo "Printing tabular results to ${finalOutput}_RESULTS.tsv"
 
     # make different headers depending on input options
-    # column 9 has the CollapseId at this point
-    tableheader=( CHROM POS End_Pos REF ALT SVLEN SVTYPE )
+    # jk: add SVID and CollapseId column headers
+    tableheader=( CHROM POS SVID End_Pos REF ALT SVLEN SVTYPE )
     case $nquery in
         1) tableheader+=( Control_support CollapseId Genotype Alt_Reads Ref_Reads Total_Reads ) ;;
         2) tableheader+=( Inheritance Control_support Genotype Alt_Reads Ref_Reads Total_Reads Parental_GT Parental_Alt_Reads Parental_Ref_Reads Parental_Total_Reads) ;;
