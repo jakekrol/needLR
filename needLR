@@ -346,7 +346,7 @@ shift
 alcannotations=""
 
 ### get other flags and options
-while getopts HP:C:L:Q:O:B:T:R:-: option
+while getopts HP:C:L:Q:O:B:T:R:o:-: option
 do
     case "${option}" in
         -)
@@ -369,9 +369,12 @@ do
         T) THREADS="${OPTARG}" ;;
         F) FILTERPASS=1 ;;
         R) ANALYSISREGION="${OPTARG}" ;;
+        o) truvari_O="${OPTARG}" ;;
         
     esac
 done
+
+echo "# truvari overlap: ${truvari_O}"
 
 temp="${OUTPUTDIR}/needlr.temp"
 
