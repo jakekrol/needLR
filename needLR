@@ -1332,7 +1332,7 @@ printTable() {
 
     # make different headers depending on input options
     # jk: add SVID and CollapseId column headers
-    tableheader=( CHROM POS SVID End_Pos REF ALT SVLEN SVTYPE )
+    tableheader=( CHROM POS End_Pos SVID REF ALT SVLEN SVTYPE )
     case $nquery in
         1) tableheader+=( Control_support CollapseId Genotype Alt_Reads Ref_Reads Total_Reads ) ;;
         2) tableheader+=( Inheritance Control_support Genotype Alt_Reads Ref_Reads Total_Reads Parental_GT Parental_Alt_Reads Parental_Ref_Reads Parental_Total_Reads) ;;
