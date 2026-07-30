@@ -6,11 +6,12 @@ BEGIN{
     chr=1;
     pos=2;
     tempcol=3;
-    ref=4;
-    alt=5;
-    svlen=6;
-    svtype=7;
+    svid=4;
+    ref=5;
+    alt=6;
+    svlen=7;
     suppvecc=colindex;
+    svtype=9;
     OFS="\t"
     
     split(names, nameArray, ",");
@@ -20,8 +21,8 @@ BEGIN{
     binary_string = $suppvecc;
     
     # Check if the binary string is all zeros
-    if (binary_string ~ /^0+$/) {
-        names_string = "query_only";
+    if (binary_string == "" || binary_string == "." || binary_string ~ /^\.?0+$/) {
+        names_string = ".";
     } else {
         # Initialize the names string
         names_string = "";
