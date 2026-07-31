@@ -611,6 +611,9 @@ truvari_merge () {
         -P "${truvari_P}" \
         -O "${truvari_O}"
 
+    echo "exiting early (jdk)"
+    exit 0
+
     ##This parses the Truvari VCF output for relevant information
     echo "Parsing Truvari VCF output"
     # keep ID and CollapseId
@@ -1335,9 +1338,9 @@ printTable() {
 
     # make different headers depending on input options
     # jk: add SVID and CollapseId column headers
-    tableheader=( CHROM POS End_Pos SVID REF ALT SVLEN SVTYPE )
+    tableheader=( CHROM POS End_Pos SVID REF ALT SVLEN Control_support SVTYPE )
     case $nquery in
-        1) tableheader+=( Control_support CollapseId Genotype Alt_Reads Ref_Reads Total_Reads ) ;;
+        1) tableheader+=( CollapseId Genotype Alt_Reads Ref_Reads Total_Reads ) ;;
         2) tableheader+=( Inheritance Control_support Genotype Alt_Reads Ref_Reads Total_Reads Parental_GT Parental_Alt_Reads Parental_Ref_Reads Parental_Total_Reads) ;;
         3) tableheader+=( Inheritance Control_support Genotype Alt_Reads Ref_Reads Total_Reads Maternal_GT Maternal_Alt_Reads Maternal_Ref_Reads Maternal_Total_Reads Paternal_GT Paternal_Alt_Reads Paternal_Ref_Reads Paternal_Total_Reads ) ;;
         *) tableheader+=( Cohort_support Control_support Pop_Count_Cohort Pop_Freq_Cohort Allele_Count_Cohort Allele_Freq_Cohort GT_coh_homWT GT_coh_het GT_coh_homVAR )
