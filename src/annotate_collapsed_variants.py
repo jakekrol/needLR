@@ -102,7 +102,6 @@ def main():
     df = df.sort_values(by='population_frequency', ascending=False)
     print("# writing output to {}".format(args.out))
     df.to_csv(args.out, sep="\t", index=False)
-    breakpoint()
 
 
 if __name__ == "__main__":
