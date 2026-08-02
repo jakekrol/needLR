@@ -4,6 +4,7 @@ from cyvcf2 import VCF
 import os
 import pandas as pd
 from jkbiolib.variant.vcf import count_alt_samples
+from collections import defaultdict
 
 parser = argparse.ArgumentParser(description="Annotate collapsed needLR variants")
 parser.add_argument("--input_vcf", required=True, help="Path to the input VCF file")
@@ -28,52 +29,63 @@ def main():
     vcf_merged = VCF(args.merged_vcf)
 
     print("# mapping merge svid to collapse id")
-    merge_svid2collapseid = {}
+    merge_svid2collapseid = defaultdict(list)
     for v in vcf_merged:
         collapseid = str(v.INFO.get(COLLAPSE_ID_FIELD)) if v.INFO.get(COLLAPSE_ID_FIELD) is not None else str(-1)
+        # svtype = v.INFO.get('SVTYPE') if v.INFO.get('SVTYPE') is not None else "."
         if ';' in v.ID:
             svids = v.ID.split(';')
             for svid in svids:
-                merge_svid2collapseid[svid] = collapseid
+                merge_svid2collapseid[svid].append(collapseid)
         else:
-            merge_svid2collapseid[v.ID] = collapseid
+            merge_svid2collapseid[v.ID].append(collapseid)
 
     print("# counting control samples with alt alleles")
     df_merged, num_control_samples = count_alt_samples(args.merged_vcf)
 
     print("# mapping merge svid to pop_freq")
-    merge_svid2popfreq = {}
+    merge_svid2popfreq = defaultdict(list)
     for i, row in df_merged.iterrows():
         svid = str(row['SVID'])
         pop_freq = row['Alt_Sample_Count'] / num_control_samples
         if ';' in svid:
             svids = svid.split(';')
             for svid in svids:
-                merge_svid2popfreq[svid] = pop_freq
+                merge_svid2popfreq[svid].append(pop_freq)
         else:
-            merge_svid2popfreq[svid] = pop_freq
+            merge_svid2popfreq[svid].append(pop_freq)
+    
+    # reduce to single pop_freq per svid by taking the max
+    for svid, pop_freqs in merge_svid2popfreq.items():
+        merge_svid2popfreq[svid] = max(pop_freqs)
 
-    collapseid2popfreq = {}
+    collapseid2popfreq = defaultdict(list)
     print("# mapping CollapseId to pop_freq")
-    for svid, collapseid in merge_svid2collapseid.items():
-        pop_freq = merge_svid2popfreq.get(svid, INVALID_POP_FREQ)
-        if collapseid in collapseid2popfreq:
-            pass
-        else:
-            collapseid2popfreq[collapseid] = pop_freq
+    for svid, collapseids in merge_svid2collapseid.items():
+        for collapseid in collapseids:
+            pop_freq = merge_svid2popfreq.get(svid, INVALID_POP_FREQ)
+            collapseid2popfreq[collapseid].append(pop_freq)
+    
+    # reduce to single pop_freq per collapseid by taking the max
+    for collapseid, pop_freqs in collapseid2popfreq.items():
+        collapseid2popfreq[collapseid] = max(pop_freqs)
     
     # matchid of collapsed vcf is a key equivalent to matchid of the merged vcf
     print("# mapping collapsed svids -> population frequency")
-    collapsed_svids2popfreq = {}
+    collapsed_svids2popfreq = defaultdict(list)
     for v in vcf_collapsed:
         match_id = str(v.INFO.get(MATCH_ID_FIELD)) if v.INFO.get(MATCH_ID_FIELD) is not None else str(-1)
         pop_freq = collapseid2popfreq.get(match_id, INVALID_POP_FREQ)
         if ';' in v.ID:
             svids = v.ID.split(';')
             for svid in svids:
-                collapsed_svids2popfreq[svid] = pop_freq 
+                collapsed_svids2popfreq[svid].append(pop_freq)
         else:
-            collapsed_svids2popfreq[v.ID] = pop_freq
+            collapsed_svids2popfreq[v.ID].append(pop_freq)
+    
+    # reduce to single pop_freq per collapsed svid by taking the max
+    for svid, pop_freqs in collapsed_svids2popfreq.items():
+        collapsed_svids2popfreq[svid] = max(pop_freqs)
 
     print("# getting population frequency for query SVIDs")
     outdata=[]
@@ -90,6 +102,7 @@ def main():
     df = df.sort_values(by='population_frequency', ascending=False)
     print("# writing output to {}".format(args.out))
     df.to_csv(args.out, sep="\t", index=False)
+    breakpoint()
 
 
 if __name__ == "__main__":
