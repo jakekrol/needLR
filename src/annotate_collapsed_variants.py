@@ -41,13 +41,23 @@ def main():
             merge_svid2collapseid[v.ID].append(collapseid)
 
     print("# counting control samples with alt alleles")
-    df_merged, num_control_samples = count_alt_samples(args.merged_vcf)
+    df_merged, _ = count_alt_samples(args.merged_vcf)
+    # careful, truvari collapse includes samples from both vcfs
+    # therefore, the number of control samples is the number of samples in the merged vcf minus the number of samples in the query vcf
+    num_control_samples = len(vcf_merged.samples) - len(vcf_input.samples)
+    # must also subtract alt samples contribution from the query vcf, since those samples are not part of the needlr control population
+    n_query_samples = len(vcf_input.samples)
+    print("# number of control samples: {}".format(num_control_samples))
+    print("# number of query samples: {}".format(n_query_samples))
 
     print("# mapping merge svid to pop_freq")
     merge_svid2popfreq = defaultdict(list)
     for i, row in df_merged.iterrows():
         svid = str(row['SVID'])
-        pop_freq = row['Alt_Sample_Count'] / num_control_samples
+        alt_sample_count = row['Alt_Sample_Count']
+        # subtract out query sample contribution to alt_sample_count
+        alt_sample_count = alt_sample_count - n_query_samples if alt_sample_count > n_query_samples else 0
+        pop_freq = alt_sample_count / num_control_samples
         if ';' in svid:
             svids = svid.split(';')
             for svid in svids:
