@@ -1,6 +1,13 @@
 ![image](https://github.com/user-attachments/assets/76787cea-94a2-41c4-9106-07206aec3926)
 # A structural variant filtering and prioritization tool for long-read sequencing data
 
+## needLR fork
+
+Additions
+
+- Keep SVs collapsed by truvari
+- Directly annotate all query SVs
+
 ## INTRODUCTION
 
 🚧 ** **_needLR  is actively under construction_** ** 🚧
